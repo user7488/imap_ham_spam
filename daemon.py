@@ -17,11 +17,12 @@ class FilterDaemon:
     
     NO_MATCH_FOLDER = '_auto_categorization/_no_match'
     
-    def __init__(self, config: AppConfig, poll_interval: int = 60, run_once: bool = False, chunk_size: int = 50):
+    def __init__(self, config: AppConfig, poll_interval: int = 60, run_once: bool = False, chunk_size: int = 50, process_all: bool = False):
         self.config = config
         self.poll_interval = poll_interval
         self.run_once = run_once
         self.chunk_size = chunk_size
+        self.process_all = process_all
         self.running = False
         self.classifier = BayesClassifier(config.db_dir)
     
@@ -31,10 +32,11 @@ class FilterDaemon:
         signal.signal(signal.SIGINT, self._handle_signal)
         signal.signal(signal.SIGTERM, self._handle_signal)
         
+        mode = "all" if self.process_all else "unseen"
         if self.run_once:
-            print(f"Running once (chunk_size={self.chunk_size}, interval={self.poll_interval}s)...")
+            print(f"Running once (mode={mode}, chunk_size={self.chunk_size}, interval={self.poll_interval}s)...")
         else:
-            print(f"Daemon started (chunk_size={self.chunk_size}, interval={self.poll_interval}s)")
+            print(f"Daemon started (mode={mode}, chunk_size={self.chunk_size}, interval={self.poll_interval}s)")
         print(f"Categories: {', '.join(self.config.categories)}")
         
         while self.running:
@@ -54,12 +56,16 @@ class FilterDaemon:
                 time.sleep(self.poll_interval)
     
     def _process_chunk(self) -> int:
-        """Fetch and classify a chunk of unseen emails. Returns count processed."""
+        """Fetch and classify a chunk of emails. Returns count processed."""
         with ImapFetcher(self.config.imap) as fetcher:
-            emails = fetcher.fetch_unseen('INBOX', limit=self.chunk_size)
+            if self.process_all:
+                emails = fetcher.fetch_from_folder('INBOX', limit=self.chunk_size, readonly=False)
+            else:
+                emails = fetcher.fetch_unseen('INBOX', limit=self.chunk_size)
             
             if not emails:
-                print("No unseen emails in INBOX")
+                msg = "No emails in INBOX" if self.process_all else "No unseen emails in INBOX"
+                print(msg)
                 return 0
             
             print(f"Processing {len(emails)} email(s)...")
@@ -96,7 +102,8 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='IMAP email auto-classifier daemon')
-    parser.add_argument('--once', action='store_true', help='Process all emails once and exit')
+    parser.add_argument('--once', action='store_true', help='Process emails and exit')
+    parser.add_argument('--all', action='store_true', help='Process all emails (not just unseen)')
     parser.add_argument('--interval', type=int, default=60, help='Poll interval in seconds (default: 60)')
     parser.add_argument('--chunk-size', type=int, default=50, help='Emails per chunk (default: 50)')
     args = parser.parse_args()
@@ -107,7 +114,13 @@ def main():
         print("Error: Set IMAP_USER and IMAP_PASS environment variables")
         sys.exit(1)
     
-    daemon = FilterDaemon(config, poll_interval=args.interval, run_once=args.once, chunk_size=args.chunk_size)
+    daemon = FilterDaemon(
+        config,
+        poll_interval=args.interval,
+        run_once=args.once,
+        chunk_size=args.chunk_size,
+        process_all=args.all,
+    )
     daemon.start()
 
 if __name__ == '__main__':
