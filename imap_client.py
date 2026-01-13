@@ -68,13 +68,16 @@ class ImapFetcher:
         
         return emails
     
-    def fetch_unseen(self, folder: str = 'INBOX') -> list[Email]:
+    def fetch_unseen(self, folder: str = 'INBOX', limit: int = 0) -> list[Email]:
         """Fetch only unseen emails from a folder."""
         if not self.client:
             raise RuntimeError("Not connected")
         
         self.client.select_folder(folder)
         uids = self.client.search(['UNSEEN'])
+        
+        if limit > 0:
+            uids = uids[:limit]
         
         if not uids:
             return []
@@ -93,6 +96,14 @@ class ImapFetcher:
             ))
         
         return emails
+    
+    def count_unseen(self, folder: str = 'INBOX') -> int:
+        """Count unseen emails in a folder."""
+        if not self.client:
+            raise RuntimeError("Not connected")
+        self.client.select_folder(folder, readonly=True)
+        uids = self.client.search(['UNSEEN'])
+        return len(uids)
     
     def move_email(self, uid: int, dest_folder: str) -> None:
         """Move an email to a destination folder."""
