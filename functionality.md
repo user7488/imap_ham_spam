@@ -2,21 +2,36 @@
 
 ## Implemented Features
 
-| ID | Name | Description | Status |
-|----|------|-------------|--------|
-| F01 | config_loader | Load IMAP credentials and category definitions | Planned |
-| F02 | imap_fetcher | Connect to IMAP and fetch emails from category folders | Planned |
-| F03 | local_storage | Store fetched emails locally per category | Planned |
-| F04 | trainer | Train SpamBayes classifiers per category | Planned |
-| F05 | classifier | Score incoming emails against trained models | Planned |
-| F06 | daemon | Background service to auto-classify new emails | Planned |
+| ID | Name | File | Description | Status |
+|----|------|------|-------------|--------|
+| F01 | config_loader | config.py | Load IMAP credentials and category definitions | Done |
+| F02 | imap_fetcher | imap_client.py | Connect to IMAP and fetch emails from category folders | Done |
+| F03 | local_storage | storage.py | Store fetched emails locally per category | Done |
+| F04 | trainer | trainer.py | Train SpamBayes classifiers per category | Done |
+| F05 | classifier | classifier.py | Score incoming emails against trained models | Done |
+| F06 | daemon | daemon.py | Background service to auto-classify new emails | Done |
+
+## CLI Scripts
+
+| Script | Purpose |
+|--------|---------|
+| fetch_training_data.py | Fetch emails from IMAP folders to local storage |
+| train.py | Train classifiers from local data |
+| daemon.py | Run the auto-classification daemon |
 
 ## Tags Summary
 
 | Tag | Meaning | Count |
 |-----|---------|-------|
-| `#TODOLLM` | Unfinished task requiring implementation | 0 |
-| `#NOTELLM` | Note for future reference | 0 |
-| `#LATERLLM` | Deferred work / low priority | 0 |
+| `#TODOLLM` | Unfinished task requiring implementation | 2 |
+| `#NOTELLM` | Note for future reference | 1 |
+| `#LATERLLM` | Deferred work / low priority | 1 |
+
+### Tag Locations
+
+- `config.py`: `#TODOLLM` - Add .env file support for credentials
+- `classifier.py`: `#TODOLLM` - Parse actual SpamBayes output format
+- `imap_client.py`: `#NOTELLM` - Gmail uses COPY+DELETE instead of MOVE for older IMAP
+- `trainer.py`: `#LATERLLM` - Consider batching for large file counts
 
 *Code is the source of truth for tag counts.*
