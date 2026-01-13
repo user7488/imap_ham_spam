@@ -88,19 +88,19 @@ class FilterDaemon:
                 
                 if result:
                     dest_folder = f"_auto_categorization/{result.category}"
-                    fetcher.move_email(email.uid, dest_folder)
                     print(f"    Decision: MATCH → {result.category} (score={result.score:.2f})")
+                    if self.tag_moved:
+                        fetcher.copy_email(email.uid, self.tag_moved)
+                        print(f"    Tagged: {self.tag_moved}")
+                    fetcher.move_email(email.uid, dest_folder)
                     print(f"    Action: MOVE to {dest_folder}")
-                    if self.tag_moved:
-                        fetcher.copy_email(email.uid, self.tag_moved)
-                        print(f"    Tagged: {self.tag_moved}")
                 else:
-                    fetcher.move_email(email.uid, self.NO_MATCH_FOLDER)
                     print(f"    Decision: NO MATCH (threshold={self.classifier.threshold})")
-                    print(f"    Action: MOVE to {self.NO_MATCH_FOLDER}")
                     if self.tag_moved:
                         fetcher.copy_email(email.uid, self.tag_moved)
                         print(f"    Tagged: {self.tag_moved}")
+                    fetcher.move_email(email.uid, self.NO_MATCH_FOLDER)
+                    print(f"    Action: MOVE to {self.NO_MATCH_FOLDER}")
             
             return len(emails)
     
