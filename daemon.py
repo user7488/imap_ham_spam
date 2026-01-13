@@ -97,6 +97,7 @@ class FilterDaemon:
     def _handle_signal(self, signum, frame) -> None:
         print("\nShutting down...")
         self.running = False
+        sys.exit(0)
 
 def main():
     import argparse
