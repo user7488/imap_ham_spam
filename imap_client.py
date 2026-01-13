@@ -39,12 +39,12 @@ class ImapFetcher:
         folders = self.client.list_folders()
         return [f[2] for f in folders]
     
-    def fetch_from_folder(self, folder: str, limit: int = 0) -> list[Email]:
+    def fetch_from_folder(self, folder: str, limit: int = 0, readonly: bool = True) -> list[Email]:
         """Fetch emails from a specific folder."""
         if not self.client:
             raise RuntimeError("Not connected")
         
-        self.client.select_folder(folder, readonly=True)
+        self.client.select_folder(folder, readonly=readonly)
         uids = self.client.search(['ALL'])
         
         if limit > 0:
