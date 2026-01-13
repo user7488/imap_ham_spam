@@ -69,6 +69,9 @@ class FilterDaemon:
                 print(msg)
                 return 0
             
+            if self.tag_moved:
+                fetcher.create_folder(self.tag_moved)
+            
             print(f"Processing {len(emails)} email(s)...")
             
             for email in emails:
