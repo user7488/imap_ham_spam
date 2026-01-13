@@ -10,6 +10,9 @@
 | F04 | trainer | trainer.py | Train SpamBayes classifiers per category | Done |
 | F05 | classifier | classifier.py | Score incoming emails against trained models | Done |
 | F06 | daemon | daemon.py | Background service to auto-classify new emails | Done |
+| F07 | chunk_processing | daemon.py | Process INBOX in 50-email chunks | Done |
+| F08 | run_once | daemon.py | --once flag to process all and exit | Done |
+| F09 | no_match_folder | daemon.py | Move unmatched emails to _no_match | Done |
 
 ## CLI Scripts
 
