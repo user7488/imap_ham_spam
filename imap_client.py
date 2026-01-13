@@ -112,6 +112,19 @@ class ImapFetcher:
         # #NOTELLM: Gmail uses COPY+DELETE instead of MOVE for older IMAP
         self.client.move([uid], dest_folder)
     
+    def copy_email(self, uid: int, dest_folder: str) -> None:
+        """Copy an email to a destination folder (adds label in Gmail)."""
+        if not self.client:
+            raise RuntimeError("Not connected")
+        self.client.copy([uid], dest_folder)
+    
+    def create_folder(self, folder: str) -> None:
+        """Create a folder (label in Gmail)."""
+        if not self.client:
+            raise RuntimeError("Not connected")
+        if not self.client.folder_exists(folder):
+            self.client.create_folder(folder)
+    
     def __enter__(self):
         self.connect()
         return self
