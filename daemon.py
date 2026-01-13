@@ -15,13 +15,13 @@ from classifier import BayesClassifier
 class FilterDaemon:
     """Background service to auto-classify incoming emails."""
     
-    CHUNK_SIZE = 50
     NO_MATCH_FOLDER = '_auto_categorization/_no_match'
     
-    def __init__(self, config: AppConfig, poll_interval: int = 60, run_once: bool = False):
+    def __init__(self, config: AppConfig, poll_interval: int = 60, run_once: bool = False, chunk_size: int = 50):
         self.config = config
         self.poll_interval = poll_interval
         self.run_once = run_once
+        self.chunk_size = chunk_size
         self.running = False
         self.classifier = BayesClassifier(config.db_dir)
     
@@ -32,9 +32,9 @@ class FilterDaemon:
         signal.signal(signal.SIGTERM, self._handle_signal)
         
         if self.run_once:
-            print("Running once...")
+            print(f"Running once (chunk_size={self.chunk_size}, interval={self.poll_interval}s)...")
         else:
-            print(f"Daemon started, polling every {self.poll_interval}s")
+            print(f"Daemon started (chunk_size={self.chunk_size}, interval={self.poll_interval}s)")
         print(f"Categories: {', '.join(self.config.categories)}")
         
         while self.running:
@@ -56,24 +56,35 @@ class FilterDaemon:
     def _process_chunk(self) -> int:
         """Fetch and classify a chunk of unseen emails. Returns count processed."""
         with ImapFetcher(self.config.imap) as fetcher:
-            emails = fetcher.fetch_unseen('INBOX', limit=self.CHUNK_SIZE)
+            emails = fetcher.fetch_unseen('INBOX', limit=self.chunk_size)
             
             if not emails:
+                print("No unseen emails in INBOX")
                 return 0
             
             print(f"Processing {len(emails)} email(s)...")
             
             for email in emails:
+                subject = email.subject[:50] if email.subject else '(no subject)'
+                sender = email.sender[:30] if email.sender else '(unknown)'
+                
+                all_scores = self.classifier.classify_all(email.raw, self.config.categories)
                 result = self.classifier.classify(email.raw, self.config.categories)
-                subject = email.subject[:40] if email.subject else '(no subject)'
+                
+                scores_str = ', '.join(f"{r.category}={r.score:.2f}" for r in all_scores[:3])
+                print(f"\n  [{email.uid}] {sender}")
+                print(f"    Subject: {subject}")
+                print(f"    Scores: {scores_str}")
                 
                 if result:
                     dest_folder = f"_auto_categorization/{result.category}"
                     fetcher.move_email(email.uid, dest_folder)
-                    print(f"  → {result.category} ({result.score:.2f}): {subject}")
+                    print(f"    Decision: MATCH → {result.category} (score={result.score:.2f})")
+                    print(f"    Action: MOVE to {dest_folder}")
                 else:
                     fetcher.move_email(email.uid, self.NO_MATCH_FOLDER)
-                    print(f"  → _no_match: {subject}")
+                    print(f"    Decision: NO MATCH (threshold={self.classifier.threshold})")
+                    print(f"    Action: MOVE to {self.NO_MATCH_FOLDER}")
             
             return len(emails)
     
@@ -87,6 +98,7 @@ def main():
     parser = argparse.ArgumentParser(description='IMAP email auto-classifier daemon')
     parser.add_argument('--once', action='store_true', help='Process all emails once and exit')
     parser.add_argument('--interval', type=int, default=60, help='Poll interval in seconds (default: 60)')
+    parser.add_argument('--chunk-size', type=int, default=50, help='Emails per chunk (default: 50)')
     args = parser.parse_args()
     
     config = load_config()
@@ -95,7 +107,7 @@ def main():
         print("Error: Set IMAP_USER and IMAP_PASS environment variables")
         sys.exit(1)
     
-    daemon = FilterDaemon(config, poll_interval=args.interval, run_once=args.once)
+    daemon = FilterDaemon(config, poll_interval=args.interval, run_once=args.once, chunk_size=args.chunk_size)
     daemon.start()
 
 if __name__ == '__main__':
