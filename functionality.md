@@ -23,15 +23,13 @@
 
 | Tag | Meaning | Count |
 |-----|---------|-------|
-| `#TODOLLM` | Unfinished task requiring implementation | 2 |
+| `#TODOLLM` | Unfinished task requiring implementation | 1 |
 | `#NOTELLM` | Note for future reference | 1 |
-| `#LATERLLM` | Deferred work / low priority | 1 |
+| `#LATERLLM` | Deferred work / low priority | 0 |
 
 ### Tag Locations
 
 - `config.py`: `#TODOLLM` - Add .env file support for credentials
-- `classifier.py`: `#TODOLLM` - Parse actual SpamBayes output format
 - `imap_client.py`: `#NOTELLM` - Gmail uses COPY+DELETE instead of MOVE for older IMAP
-- `trainer.py`: `#LATERLLM` - Consider batching for large file counts
 
 *Code is the source of truth for tag counts.*

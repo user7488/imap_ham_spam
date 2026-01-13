@@ -1,9 +1,15 @@
 """
-Train SpamBayes classifiers per category.
+Train Naive Bayes classifiers per category using scikit-learn.
 """
 
-import subprocess
 from pathlib import Path
+from email import message_from_bytes
+import joblib
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.pipeline import Pipeline
+
 from storage import LocalStorage
 
 class BayesTrainer:
@@ -14,34 +20,63 @@ class BayesTrainer:
         self.storage = storage
         self.db_dir.mkdir(parents=True, exist_ok=True)
     
-    def db_path(self, category: str) -> Path:
-        return self.db_dir / f"{category}.db"
+    def model_path(self, category: str) -> Path:
+        return self.db_dir / f"{category}.joblib"
+    
+    def _extract_text(self, raw: bytes) -> str:
+        """Extract text content from email."""
+        msg = message_from_bytes(raw)
+        parts = []
+        
+        parts.append(msg.get('Subject', ''))
+        parts.append(msg.get('From', ''))
+        
+        if msg.is_multipart():
+            for part in msg.walk():
+                if part.get_content_type() == 'text/plain':
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        parts.append(payload.decode('utf-8', errors='ignore'))
+        else:
+            payload = msg.get_payload(decode=True)
+            if payload:
+                parts.append(payload.decode('utf-8', errors='ignore'))
+        
+        return ' '.join(parts)
     
     def train_category(self, category: str, all_categories: list[str]) -> dict:
         """
         Train a classifier for a single category.
-        Emails in this category are HAM, all others are SPAM.
+        Emails in this category are positive (1), all others are negative (0).
         """
-        db = self.db_path(category)
-        stats = {'ham': 0, 'spam': 0}
+        texts = []
+        labels = []
         
-        ham_folder = self.storage.category_path(category)
-        ham_files = list(ham_folder.glob('*.eml'))
-        
-        if ham_files:
-            self._run_sb_filter('--ham', ham_files, db)
-            stats['ham'] = len(ham_files)
+        ham_emails = self.storage.load_emails(category)
+        for raw in ham_emails:
+            texts.append(self._extract_text(raw))
+            labels.append(1)
         
         for other_cat in all_categories:
             if other_cat == category:
                 continue
-            spam_folder = self.storage.category_path(other_cat)
-            spam_files = list(spam_folder.glob('*.eml'))
-            if spam_files:
-                self._run_sb_filter('--spam', spam_files, db)
-                stats['spam'] += len(spam_files)
+            spam_emails = self.storage.load_emails(other_cat)
+            for raw in spam_emails:
+                texts.append(self._extract_text(raw))
+                labels.append(0)
         
-        return stats
+        if not texts:
+            return {'ham': 0, 'spam': 0}
+        
+        pipeline = Pipeline([
+            ('tfidf', TfidfVectorizer(max_features=5000, stop_words='english')),
+            ('clf', MultinomialNB()),
+        ])
+        
+        pipeline.fit(texts, labels)
+        joblib.dump(pipeline, self.model_path(category))
+        
+        return {'ham': len(ham_emails), 'spam': len(texts) - len(ham_emails)}
     
     def train_all(self, categories: list[str]) -> dict[str, dict]:
         """Train classifiers for all categories."""
@@ -50,10 +85,3 @@ class BayesTrainer:
             if self.storage.count_emails(category) > 0:
                 results[category] = self.train_category(category, categories)
         return results
-    
-    def _run_sb_filter(self, mode: str, files: list[Path], db: Path) -> None:
-        """Run sb_filter.py with given mode and files."""
-        # #LATERLLM: Consider batching for large file counts
-        cmd = ['sb_filter.py', mode, f'--database={db}']
-        cmd.extend(str(f) for f in files)
-        subprocess.run(cmd, check=True, capture_output=True)
