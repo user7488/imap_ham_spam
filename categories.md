@@ -10,5 +10,5 @@ _auto_categorization
     \ recibos
     \ system_jobs
     \ system_notifications
-    \ _no_match
+    * _no_match (not trained)
 
