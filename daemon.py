@@ -17,12 +17,13 @@ class FilterDaemon:
     
     NO_MATCH_FOLDER = '_auto_categorization/_no_match'
     
-    def __init__(self, config: AppConfig, poll_interval: int = 60, run_once: bool = False, chunk_size: int = 50, process_all: bool = False):
+    def __init__(self, config: AppConfig, poll_interval: int = 60, run_once: bool = False, chunk_size: int = 50, process_all: bool = False, tag_moved: str | None = None):
         self.config = config
         self.poll_interval = poll_interval
         self.run_once = run_once
         self.chunk_size = chunk_size
         self.process_all = process_all
+        self.tag_moved = tag_moved
         self.running = False
         self.classifier = BayesClassifier(config.db_dir)
     
@@ -87,10 +88,16 @@ class FilterDaemon:
                     fetcher.move_email(email.uid, dest_folder)
                     print(f"    Decision: MATCH → {result.category} (score={result.score:.2f})")
                     print(f"    Action: MOVE to {dest_folder}")
+                    if self.tag_moved:
+                        fetcher.copy_email(email.uid, self.tag_moved)
+                        print(f"    Tagged: {self.tag_moved}")
                 else:
                     fetcher.move_email(email.uid, self.NO_MATCH_FOLDER)
                     print(f"    Decision: NO MATCH (threshold={self.classifier.threshold})")
                     print(f"    Action: MOVE to {self.NO_MATCH_FOLDER}")
+                    if self.tag_moved:
+                        fetcher.copy_email(email.uid, self.tag_moved)
+                        print(f"    Tagged: {self.tag_moved}")
             
             return len(emails)
     
@@ -107,6 +114,7 @@ def main():
     parser.add_argument('--all', action='store_true', help='Process all emails (not just unseen)')
     parser.add_argument('--interval', type=int, default=60, help='Poll interval in seconds (default: 60)')
     parser.add_argument('--chunk-size', type=int, default=50, help='Emails per chunk (default: 50)')
+    parser.add_argument('--tag-moved', type=str, default=None, help='Tag moved emails with this label (e.g., testrun-26-01-13)')
     args = parser.parse_args()
     
     config = load_config()
@@ -121,6 +129,7 @@ def main():
         run_once=args.once,
         chunk_size=args.chunk_size,
         process_all=args.all,
+        tag_moved=args.tag_moved,
     )
     daemon.start()
 
