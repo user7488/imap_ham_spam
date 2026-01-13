@@ -1,11 +1,11 @@
 """
-Score emails against trained Bayesian classifiers.
+Score emails against trained Naive Bayes classifiers.
 """
 
-import subprocess
-import tempfile
 from pathlib import Path
+from email import message_from_bytes
 from dataclasses import dataclass
+import joblib
 
 @dataclass
 class ClassificationResult:
@@ -15,46 +15,52 @@ class ClassificationResult:
 class BayesClassifier:
     """Score emails against multiple category classifiers."""
     
-    def __init__(self, db_dir: Path, threshold: float = 0.90):
+    def __init__(self, db_dir: Path, threshold: float = 0.70):
         self.db_dir = db_dir
         self.threshold = threshold
+        self._models: dict = {}
     
-    def db_path(self, category: str) -> Path:
-        return self.db_dir / f"{category}.db"
+    def model_path(self, category: str) -> Path:
+        return self.db_dir / f"{category}.joblib"
+    
+    def _load_model(self, category: str):
+        """Load model lazily."""
+        if category not in self._models:
+            path = self.model_path(category)
+            if path.exists():
+                self._models[category] = joblib.load(path)
+        return self._models.get(category)
+    
+    def _extract_text(self, raw: bytes) -> str:
+        """Extract text content from email."""
+        msg = message_from_bytes(raw)
+        parts = []
+        
+        parts.append(msg.get('Subject', ''))
+        parts.append(msg.get('From', ''))
+        
+        if msg.is_multipart():
+            for part in msg.walk():
+                if part.get_content_type() == 'text/plain':
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        parts.append(payload.decode('utf-8', errors='ignore'))
+        else:
+            payload = msg.get_payload(decode=True)
+            if payload:
+                parts.append(payload.decode('utf-8', errors='ignore'))
+        
+        return ' '.join(parts)
     
     def score(self, email_raw: bytes, category: str) -> float:
         """Get the probability that an email belongs to a category."""
-        db = self.db_path(category)
-        if not db.exists():
+        model = self._load_model(category)
+        if model is None:
             return 0.0
         
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.eml') as f:
-            f.write(email_raw)
-            f.flush()
-            temp_path = f.name
-        
-        try:
-            result = subprocess.run(
-                ['sb_filter.py', '--classify', f'--database={db}', temp_path],
-                capture_output=True,
-                text=True,
-            )
-            return self._parse_score(result.stdout)
-        finally:
-            Path(temp_path).unlink(missing_ok=True)
-    
-    def _parse_score(self, output: str) -> float:
-        """Parse SpamBayes output to extract probability."""
-        # #TODOLLM: Parse actual SpamBayes output format
-        for line in output.splitlines():
-            if 'probability' in line.lower() or 'score' in line.lower():
-                parts = line.split()
-                for part in parts:
-                    try:
-                        return float(part)
-                    except ValueError:
-                        continue
-        return 0.0
+        text = self._extract_text(email_raw)
+        proba = model.predict_proba([text])[0]
+        return proba[1]  # probability of class 1 (positive/ham)
     
     def classify(self, email_raw: bytes, categories: list[str]) -> ClassificationResult | None:
         """Classify an email against all categories, return best match above threshold."""

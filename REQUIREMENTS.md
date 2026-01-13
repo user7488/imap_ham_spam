@@ -16,8 +16,7 @@ emerge -av dev-libs/openssl
 ## Python Packages
 
 ```bash
-pip install --user imapclient
-pip install --user spambayes
+pip install imapclient scikit-learn joblib
 ```
 
 ## Configuration
